@@ -126,6 +126,8 @@ app.delete('/api/documents/:id', async (req, res) => {
     res.json({ message: 'Data berhasil dihapus' });
 });
 
-app.listen(3000, () => {
-    console.log('🚀 Server berjalan di http://localhost:3000');
+// KODE BARU (Benar untuk Cloud & Local)
+const PORT = process.env.PORT || 3000; // Railway akan mengisi process.env.PORT otomatis
+app.listen(PORT, () => {
+    console.log(`🚀 Server berjalan di port ${PORT}`);
 });
