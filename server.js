@@ -8,12 +8,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- KONEKSI DATABASE ---
+// --- KONEKSI DATABASE (SMART CONFIG) ---
 const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'database notulen'
+    // Server akan cek: "Apakah aku sedang di Railway?"
+    // Jika YA (ada process.env), pakai data Railway.
+    // Jika TIDAK, pakai data Localhost (XAMPP).
+    host: process.env.MYSQLHOST || 'localhost',
+    user: process.env.MYSQLUSER || 'root',
+    password: process.env.MYSQLPASSWORD || '',
+    database: process.env.MYSQLDATABASE || 'database notulen',
+    port: process.env.MYSQLPORT || 3306
 };
 
 async function queryDatabase(query, params) {
