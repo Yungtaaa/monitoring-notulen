@@ -1,0 +1,127 @@
+const express = require('express');
+const cors = require('cors');
+const mysql = require('mysql2/promise');
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// --- KONEKSI DATABASE ---
+const dbConfig = {
+    host: 'localhost',
+    user: 'root',
+    password: '',
+    database: 'database notulen'
+};
+
+async function queryDatabase(query, params) {
+    const connection = await mysql.createConnection(dbConfig);
+    try {
+        const [results, ] = await connection.execute(query, params);
+        return results;
+    } finally {
+        connection.end();
+    }
+}
+
+// =======================
+// 🔐 FITUR AUTH (LOGIN)
+// =======================
+
+// 1. LOGIN CHECK
+app.post('/api/login', async (req, res) => {
+    try {
+        const { username, password } = req.body;
+        // Cari user berdasarkan username & password
+        const sql = "SELECT * FROM users WHERE username = ? AND password = ?";
+        const users = await queryDatabase(sql, [username, password]);
+
+        if (users.length > 0) {
+            // Login Sukses
+            const user = users[0];
+            res.json({ 
+                success: true, 
+                message: 'Login Berhasil',
+                data: { id: user.id, username: user.username, fullname: user.fullname, role: user.role }
+            });
+        } else {
+            // Login Gagal
+            res.status(401).json({ success: false, message: 'Username atau Password salah!' });
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 2. AMBIL SEMUA USER (Untuk Menu Akun)
+app.get('/api/users', async (req, res) => {
+    try {
+        const users = await queryDatabase("SELECT id, username, fullname, role FROM users");
+        res.json(users);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 3. TAMBAH USER BARU
+app.post('/api/users', async (req, res) => {
+    try {
+        const { username, password, fullname, role } = req.body;
+        const sql = "INSERT INTO users (username, password, fullname, role) VALUES (?, ?, ?, ?)";
+        await queryDatabase(sql, [username, password, fullname, role]);
+        res.json({ message: 'User berhasil dibuat' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// 4. HAPUS USER
+app.delete('/api/users/:id', async (req, res) => {
+    try {
+        await queryDatabase("DELETE FROM users WHERE id = ?", [req.params.id]);
+        res.json({ message: 'User dihapus' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
+// =======================
+// 📄 FITUR NOTULEN
+// =======================
+
+// READ
+app.get('/api/documents', async (req, res) => {
+    const docs = await queryDatabase('SELECT * FROM `tabel notulen` ORDER BY id_notulen DESC');
+    res.json(docs);
+});
+
+// CREATE
+app.post('/api/documents', async (req, res) => {
+    const { nomor_notulen, nama_notulen, tanggal_notulen, jenis, status_notulen } = req.body;
+    const sql = `INSERT INTO \`tabel notulen\` (nomor_notulen, nama_notulen, tanggal_notulen, jenis, status_notulen) VALUES (?, ?, ?, ?, ?)`;
+    const result = await queryDatabase(sql, [nomor_notulen, nama_notulen, tanggal_notulen, jenis, status_notulen]);
+    res.json({ message: 'Berhasil disimpan', id: result.insertId });
+});
+
+// UPDATE
+app.put('/api/documents/:id', async (req, res) => {
+    const { id } = req.params;
+    const { nomor_notulen, nama_notulen, tanggal_notulen, jenis, status_notulen } = req.body;
+    const sql = `UPDATE \`tabel notulen\` SET nomor_notulen=?, nama_notulen=?, tanggal_notulen=?, jenis=?, status_notulen=? WHERE id_notulen=?`;
+    await queryDatabase(sql, [nomor_notulen, nama_notulen, tanggal_notulen, jenis, status_notulen, id]);
+    res.json({ message: 'Data berhasil diupdate' });
+});
+
+// DELETE
+app.delete('/api/documents/:id', async (req, res) => {
+    const sql = 'DELETE FROM `tabel notulen` WHERE id_notulen = ?';
+    await queryDatabase(sql, [req.params.id]);
+    res.json({ message: 'Data berhasil dihapus' });
+});
+
+app.listen(3000, () => {
+    console.log('🚀 Server berjalan di http://localhost:3000');
+});

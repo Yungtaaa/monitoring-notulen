@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Monitoring Notulen</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* Terapkan Font Modern */
+        body { font-family: 'Inter', sans-serif; }
+
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        aside { transition: width 0.3s ease-in-out; }
+        
+        .menu-text { transition: opacity 0.2s; white-space: nowrap; overflow: hidden; }
+        .sidebar-collapsed .menu-text { opacity: 0; width: 0; display: none; }
+        .sidebar-collapsed .logo-text { display: none; }
+        .sidebar-collapsed { width: 5rem; } 
+        
+        aside::-webkit-scrollbar { width: 4px; }
+        aside::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 4px; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800 font-sans antialiased">
+
+    <div id="login-section" class="flex h-screen items-center justify-center bg-gradient-to-br from-blue-900 to-slate-800 p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-md fade-in">
+            <div class="text-center mb-8">
+                <div class="bg-blue-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-600">
+                    <i class="ph ph-lock-key text-3xl"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800">Login Sistem</h1>
+                <p class="text-gray-500 text-sm">Monitoring Notulen</p>
+            </div>
+            
+            <form id="loginForm" class="space-y-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <div class="relative">
+                        <i class="ph ph-user absolute left-3 top-3 text-gray-400"></i>
+                        <input type="text" id="loginUser" required class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition" placeholder="Masukkan username">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <div class="relative">
+                        <i class="ph ph-lock absolute left-3 top-3 text-gray-400"></i>
+                        <input type="password" id="loginPass" required class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition" placeholder="Masukkan password">
+                    </div>
+                </div>
+                <button type="submit" id="btnLogin" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition shadow-lg transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                    MASUK
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div id="dashboard-section" class="hidden flex h-screen overflow-hidden">
+        
+        <aside id="sidebar" class="w-64 bg-white border-r border-gray-200 flex flex-col z-20 shadow-lg h-full shrink-0">
+            <div class="p-6 flex items-center justify-center gap-3 border-b border-gray-100 h-20">
+                <i class="ph ph-list-checks text-3xl text-blue-600 shrink-0"></i>
+                <div class="logo-text">
+                    <h1 class="font-bold text-sm leading-tight tracking-wider">MONITORING<br>NOTULEN</h1>
+                </div>
+            </div>
+
+            <nav class="flex-1 overflow-y-auto py-4 px-3 space-y-2">
+                <button onclick="switchView('dashboard')" id="nav-dashboard" class="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-lg hover:bg-gray-50 transition text-left group bg-blue-50 text-blue-600">
+                    <i class="ph ph-presentation-chart text-2xl shrink-0"></i> 
+                    <span class="menu-text">Dashboard</span>
+                </button>
+
+                <div>
+                    <button onclick="toggleMenu('menu-data')" class="w-full flex justify-between items-center px-4 py-3 text-sm font-semibold rounded-lg hover:bg-gray-50 transition text-left text-gray-700">
+                        <div class="flex items-center gap-3">
+                            <i class="ph ph-database text-2xl shrink-0"></i> 
+                            <span class="menu-text">Data Master</span>
+                        </div>
+                        <i class="ph ph-caret-down text-gray-400 transform transition-transform menu-text" id="arrow-menu-data"></i>
+                    </button>
+                    <div id="menu-data" class="hidden pl-4 pr-2 space-y-1 mt-1">
+                        <button onclick="switchView('input')" id="nav-input" class="w-full text-left px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-blue-50 hover:text-blue-600 transition flex items-center gap-2">
+                            <i class="ph ph-plus-circle text-xl shrink-0"></i>
+                            <span class="menu-text">Input Baru</span>
+                        </button>
+                        <button onclick="switchView('database')" id="nav-database" class="w-full text-left px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-blue-50 hover:text-blue-600 transition flex items-center gap-2">
+                            <i class="ph ph-table text-xl shrink-0"></i>
+                            <span class="menu-text">Database</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div>
+                    <button onclick="toggleMenu('menu-account')" class="w-full flex justify-between items-center px-4 py-3 text-sm font-semibold rounded-lg hover:bg-gray-50 transition text-left text-gray-700">
+                        <div class="flex items-center gap-3">
+                            <i class="ph ph-user-circle text-2xl shrink-0"></i> 
+                            <span class="menu-text">Account</span>
+                        </div>
+                        <i class="ph ph-caret-down text-gray-400 transform transition-transform menu-text" id="arrow-menu-account"></i>
+                    </button>
+                    <div id="menu-account" class="hidden pl-4 pr-2 space-y-1 mt-1">
+                        <button onclick="switchView('users')" id="nav-users" class="w-full text-left px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-blue-50 hover:text-blue-600 transition flex items-center gap-2">
+                            <i class="ph ph-users text-xl shrink-0"></i>
+                            <span class="menu-text">Kelola User</span>
+                        </button>
+                        <button onclick="doLogout()" class="w-full text-left px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-red-50 hover:text-red-600 transition flex items-center gap-2">
+                            <i class="ph ph-sign-out text-xl shrink-0"></i>
+                            <span class="menu-text">Logout</span>
+                        </button>
+                    </div>
+                </div>
+            </nav>
+            
+            <div class="p-4 border-t border-gray-100 bg-gray-50 menu-text">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold shadow" id="user-avatar">A</div>
+                    <div class="overflow-hidden">
+                        <p class="text-sm font-bold text-gray-800 truncate" id="user-fullname">User</p>
+                        <p class="text-[10px] text-gray-500 uppercase font-semibold tracking-wider" id="user-role">STAFF</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 overflow-y-auto bg-[#F3F4F6] relative flex flex-col">
+            <header class="bg-white p-4 shadow-sm flex items-center gap-4 sticky top-0 z-10">
+                <button onclick="toggleSidebar()" class="p-2 rounded-lg hover:bg-gray-100 text-gray-600 transition">
+                    <i class="ph ph-list text-2xl"></i>
+                </button>
+                <h2 class="text-xl font-bold text-gray-700">Sistem Monitoring</h2>
+            </header>
+
+            <div class="p-8 flex-1">
+                
+                <div id="view-dashboard" class="fade-in max-w-6xl mx-auto">
+                    <h2 class="text-3xl font-bold mb-8 text-black">Dashboard Overview</h2>
+                    
+                    <h3 class="text-lg font-bold mb-4 text-gray-700">Jenis Notulen</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                        <div class="bg-white rounded-xl shadow-sm p-6 border-l-[6px] border-[#84cc16] flex flex-col justify-between h-32 hover:shadow-md transition">
+                            <p class="text-lg font-bold text-gray-600">Schedule</p><h4 class="text-5xl font-bold text-[#84cc16]" id="count-schedule">0</h4>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm p-6 border-l-[6px] border-[#fbbf24] flex flex-col justify-between h-32 hover:shadow-md transition">
+                            <p class="text-lg font-bold text-gray-600">Important</p><h4 class="text-5xl font-bold text-[#fbbf24]" id="count-important">0</h4>
+                        </div>
+                        <div class="bg-white rounded-xl shadow-sm p-6 border-l-[6px] border-[#ef4444] flex flex-col justify-between h-32 hover:shadow-md transition">
+                            <p class="text-lg font-bold text-gray-600">Urgent</p><h4 class="text-5xl font-bold text-[#ef4444]" id="count-urgent">0</h4>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                        <div>
+                            <h3 class="text-lg font-bold mb-4 text-gray-700">Status Dokumen</h3>
+                            <div class="grid grid-cols-2 gap-6">
+                                <div class="bg-white rounded-xl shadow-sm p-5 border-l-[6px] border-[#84cc16] h-28 flex flex-col justify-center hover:shadow-md transition"><p class="text-base font-bold">Delivered</p><h4 class="text-4xl font-bold text-[#84cc16]" id="count-deliver">0</h4></div>
+                                <div class="bg-white rounded-xl shadow-sm p-5 border-l-[6px] border-[#fbbf24] h-28 flex flex-col justify-center hover:shadow-md transition"><p class="text-base font-bold">Revising</p><h4 class="text-4xl font-bold text-[#fbbf24]" id="count-revision">0</h4></div>
+                                <div class="bg-white rounded-xl shadow-sm p-5 border-l-[6px] border-[#ef4444] h-28 flex flex-col justify-center hover:shadow-md transition"><p class="text-base font-bold">Drafting</p><h4 class="text-4xl font-bold text-[#ef4444]" id="count-drafting">0</h4></div>
+                                <div class="bg-white rounded-xl shadow-sm p-5 border-l-[6px] border-[#3b82f6] h-28 flex flex-col justify-center hover:shadow-md transition"><p class="text-base font-bold">Signing</p><h4 class="text-4xl font-bold text-[#3b82f6]" id="count-signing">0</h4></div>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 class="text-lg font-bold mb-4 text-gray-700">Analisis Visual & Tahun</h3>
+                            
+                            <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+                                <div class="h-40 flex justify-center">
+                                    <canvas id="statusChart"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-6" id="year-cards-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-input" class="hidden fade-in max-w-4xl mx-auto">
+                    <h2 class="text-3xl font-bold mb-6 text-black">Input Notulen Baru</h2>
+                    <div class="bg-white rounded-2xl shadow-sm p-8 border border-gray-100">
+                        <form id="addDocForm" class="space-y-6">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div><label class="block text-sm font-bold mb-2">Nomor Notulen</label><input type="text" id="inputNomor" required class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 transition"></div>
+                                <div><label class="block text-sm font-bold mb-2">Tanggal</label><input type="date" id="inputTanggal" required class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 transition"></div>
+                            </div>
+                            <div><label class="block text-sm font-bold mb-2">Judul/Nama Notulen</label><input type="text" id="inputNama" required class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 transition"></div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div><label class="block text-sm font-bold mb-2">Jenis</label><select id="inputJenis" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 transition"><option value="Schedule">Schedule</option><option value="Important">Important</option><option value="Urgent">Urgent</option></select></div>
+                                <div><label class="block text-sm font-bold mb-2">Status Awal</label><select id="inputStatus" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 transition"><option value="Drafting">Drafting</option><option value="Revision">Revision</option><option value="Signing">Signing</option><option value="Deliver">Deliver</option></select></div>
+                            </div>
+                            <div class="flex justify-end pt-4">
+                                <button type="submit" id="btnSaveDoc" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-8 rounded-lg shadow-lg transition transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed">
+                                    Simpan Data
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div id="view-database" class="hidden fade-in max-w-7xl mx-auto">
+                    <div class="flex flex-col md:flex-row justify-between items-center mb-6 gap-4">
+                        <h2 class="text-3xl font-bold text-black">Database Notulen</h2>
+                        <div class="flex gap-2">
+                            <button onclick="fetchDocuments()" class="bg-white border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm font-medium transition"><i class="ph ph-arrow-clockwise"></i> Refresh</button>
+                            <button onclick="exportToExcel()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 flex items-center gap-2 text-sm font-medium transition shadow-sm"><i class="ph ph-microsoft-excel-logo text-lg"></i> Export Excel</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div class="lg:col-span-2 relative"><i class="ph ph-magnifying-glass absolute left-3 top-3 text-gray-400"></i><input type="text" id="searchInput" onkeyup="applyFilter()" placeholder="Cari Nomor atau Nama..." class="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"></div>
+                            <div class="relative"><select id="filterJenis" onchange="applyFilter()" class="w-full pl-3 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"><option value="">Semua Jenis</option><option value="Schedule">Schedule</option><option value="Important">Important</option><option value="Urgent">Urgent</option></select></div>
+                            <div class="relative"><select id="filterStatus" onchange="applyFilter()" class="w-full pl-3 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"><option value="">Semua Status</option><option value="Drafting">Drafting</option><option value="Revision">Revision</option><option value="Signing">Signing</option><option value="Deliver">Deliver</option></select></div>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4 pt-4 border-t border-gray-100 items-end">
+                            <div class="flex flex-col gap-1"><label class="text-xs text-gray-500">Dari Tanggal:</label><input type="date" id="startDate" onchange="applyFilter()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm"></div>
+                            <div class="flex flex-col gap-1"><label class="text-xs text-gray-500">Sampai Tanggal:</label><input type="date" id="endDate" onchange="applyFilter()" class="w-full bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm"></div>
+                            <button onclick="resetFilter()" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-medium transition h-10">Reset Filter</button>
+                        </div>
+                    </div>
+
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                    <tr class="bg-gray-50 text-gray-600 text-xs font-bold uppercase tracking-wider border-b border-gray-200">
+                                        <th class="p-5 cursor-pointer hover:bg-gray-100 select-none" onclick="sortData('nomor_notulen')">Nomor <i id="icon-nomor_notulen" class="ph ph-arrows-down-up text-gray-400"></i></th>
+                                        <th class="p-5 cursor-pointer hover:bg-gray-100 select-none" onclick="sortData('nama_notulen')">Nama Dokumen <i id="icon-nama_notulen" class="ph ph-arrows-down-up text-gray-400"></i></th>
+                                        <th class="p-5 cursor-pointer hover:bg-gray-100 select-none" onclick="sortData('tanggal_notulen')">Tanggal <i id="icon-tanggal_notulen" class="ph ph-arrows-down-up text-gray-400"></i></th>
+                                        <th class="p-5 cursor-pointer hover:bg-gray-100 select-none" onclick="sortData('jenis')">Jenis <i id="icon-jenis" class="ph ph-arrows-down-up text-gray-400"></i></th>
+                                        <th class="p-5 cursor-pointer hover:bg-gray-100 select-none" onclick="sortData('status_notulen')">Status <i id="icon-status_notulen" class="ph ph-arrows-down-up text-gray-400"></i></th>
+                                        <th class="p-5 text-center">Aksi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="document-table-body" class="text-sm text-gray-700 divide-y divide-gray-100"></tbody>
+                            </table>
+                            <div id="no-data-message" class="hidden p-8 text-center text-gray-500"><i class="ph ph-magnifying-glass text-4xl mb-2"></i><p>Data tidak ditemukan sesuai filter.</p></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="view-users" class="hidden fade-in max-w-5xl mx-auto">
+                    <h2 class="text-3xl font-bold mb-6 text-black">Kelola Akun Pengguna</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+                            <h3 class="font-bold mb-4 text-blue-600">Tambah User Baru</h3>
+                            <form id="addUserForm" class="space-y-4">
+                                <div><label class="text-xs font-bold text-gray-500 uppercase">Username</label><input type="text" id="newUsername" required class="w-full border rounded p-2 text-sm bg-gray-50"></div>
+                                <div><label class="text-xs font-bold text-gray-500 uppercase">Password</label><input type="password" id="newPassword" required class="w-full border rounded p-2 text-sm bg-gray-50"></div>
+                                <div><label class="text-xs font-bold text-gray-500 uppercase">Nama Lengkap</label><input type="text" id="newFullname" required class="w-full border rounded p-2 text-sm bg-gray-50"></div>
+                                <div><label class="text-xs font-bold text-gray-500 uppercase">Role</label><select id="newRole" class="w-full border rounded p-2 text-sm bg-gray-50"><option value="staff">Staff</option><option value="admin">Admin</option></select></div>
+                                <button type="submit" class="w-full bg-green-600 text-white font-bold py-2 rounded hover:bg-green-700 shadow transition transform hover:scale-105">Buat Akun</button>
+                            </form>
+                        </div>
+                        <div class="md:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <table class="w-full text-left">
+                                <thead class="bg-gray-50 border-b"><tr class="text-xs font-bold text-gray-500 uppercase"><th class="p-4">Username</th><th class="p-4">Nama</th><th class="p-4">Role</th><th class="p-4 text-center">Aksi</th></tr></thead>
+                                <tbody id="user-table-body" class="text-sm divide-y divide-gray-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="fixed bottom-6 right-6 bg-white border border-gray-200 shadow-2xl rounded-xl px-5 py-3 flex items-center gap-4 z-50 animate-pulse-slow">
+                <div class="bg-blue-100 p-2 rounded-full text-blue-600">
+                    <i class="ph ph-clock text-2xl"></i>
+                </div>
+                <div>
+                    <div id="live-date" class="text-xs text-gray-500 font-semibold uppercase tracking-wide">...</div>
+                    <div id="live-time" class="text-xl font-bold text-gray-800 font-mono">...</div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform scale-100 transition-transform">
+            <div class="flex justify-between items-center mb-6 border-b pb-2">
+                <h3 class="text-xl font-bold text-black">Edit Data Notulen</h3>
+                <button onclick="closeEditModal()" class="text-gray-400 hover:text-red-500"><i class="ph ph-x text-2xl"></i></button>
+            </div>
+            <form id="editForm" class="space-y-4">
+                <input type="hidden" id="editId">
+                <div><label class="block text-sm font-bold mb-1">Nomor</label><input type="text" id="editNomor" class="w-full bg-gray-50 border border-gray-200 rounded p-2"></div>
+                <div><label class="block text-sm font-bold mb-1">Nama Dokumen</label><input type="text" id="editNama" class="w-full bg-gray-50 border border-gray-200 rounded p-2"></div>
+                <div><label class="block text-sm font-bold mb-1">Tanggal</label><input type="date" id="editTanggal" class="w-full bg-gray-50 border border-gray-200 rounded p-2"></div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label class="block text-sm font-bold mb-1">Jenis</label><select id="editJenis" class="w-full bg-gray-50 border border-gray-200 rounded p-2"><option>Schedule</option><option>Important</option><option>Urgent</option></select></div>
+                    <div><label class="block text-sm font-bold mb-1">Status</label><select id="editStatus" class="w-full bg-gray-50 border border-gray-200 rounded p-2"><option>Drafting</option><option>Revision</option><option>Signing</option><option>Deliver</option></select></div>
+                </div>
+                <div class="pt-4 flex justify-end gap-2">
+                    <button type="button" onclick="closeEditModal()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">Batal</button>
+                    <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold">Simpan Perubahan</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000/api'; 
+        let allDocumentsData = []; 
+        let currentSort = { column: null, direction: 'asc' };
+        let chartInstance = null; // Variabel global untuk Chart.js
+
+        // 4. KONFIGURASI TOAST (Improvement UI)
+        const Toast = Swal.mixin({
+            toast: true,
+            position: 'top-end',
+            showConfirmButton: false,
+            timer: 3000,
+            timerProgressBar: true,
+            didOpen: (toast) => {
+                toast.addEventListener('mouseenter', Swal.stopTimer)
+                toast.addEventListener('mouseleave', Swal.resumeTimer)
+            }
+        });
+
+        // --- 1. AUTHENTICATION & SESSION ---
+        function checkSession() {
+            const user = JSON.parse(localStorage.getItem('user_session'));
+            const loginSec = document.getElementById('login-section');
+            const dashSec = document.getElementById('dashboard-section');
+
+            if (!user) {
+                loginSec.classList.remove('hidden');
+                dashSec.classList.add('hidden');
+            } else {
+                loginSec.classList.add('hidden');
+                dashSec.classList.remove('hidden');
+                
+                document.getElementById('user-fullname').innerText = user.fullname;
+                document.getElementById('user-role').innerText = user.role.toUpperCase();
+                document.getElementById('user-avatar').innerText = user.fullname.charAt(0).toUpperCase();
+                
+                fetchDocuments();
+                updateClock();
+            }
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // 3. IMPROVEMENT LOADING STATE
+            const btn = document.getElementById('btnLogin');
+            const originalText = btn.innerText;
+            btn.innerText = 'MEMERIKSA...';
+            btn.disabled = true;
+
+            const username = document.getElementById('loginUser').value;
+            const password = document.getElementById('loginPass').value;
+
+            try {
+                const res = await fetch(`${API_URL}/login`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ username, password })
+                });
+                const result = await res.json();
+
+                if (result.success) {
+                    localStorage.setItem('user_session', JSON.stringify(result.data));
+                    Toast.fire({ icon: 'success', title: 'Login Berhasil' });
+                    setTimeout(checkSession, 1000);
+                } else {
+                    Swal.fire('Gagal', result.message, 'error');
+                }
+            } catch (err) { Swal.fire('Error', 'Gagal koneksi ke server', 'error'); }
+            
+            // Reset Button
+            btn.innerText = originalText;
+            btn.disabled = false;
+        });
+
+        function doLogout() {
+            Swal.fire({
+                title: 'Keluar aplikasi?', icon: 'warning', showCancelButton: true, confirmButtonText: 'Ya, Keluar', confirmButtonColor: '#d33'
+            }).then((res) => {
+                if (res.isConfirmed) {
+                    localStorage.removeItem('user_session'); 
+                    window.location.reload();
+                }
+            });
+        }
+
+        // --- 2. USER MANAGEMENT ---
+        async function fetchUsers() {
+            try {
+                const res = await fetch(`${API_URL}/users`);
+                const users = await res.json();
+                const tbody = document.getElementById('user-table-body');
+                tbody.innerHTML = '';
+                
+                users.forEach(u => {
+                    tbody.innerHTML += `
+                        <tr class="hover:bg-gray-50 transition border-b border-gray-100">
+                            <td class="p-4 font-bold text-gray-700">${u.username}</td>
+                            <td class="p-4">${u.fullname}</td>
+                            <td class="p-4"><span class="bg-gray-100 px-2 py-1 rounded text-xs font-bold uppercase border border-gray-200">${u.role}</span></td>
+                            <td class="p-4 text-center"><button onclick="deleteUser(${u.id})" class="text-red-400 hover:text-red-600 transition bg-red-50 p-2 rounded-full"><i class="ph ph-trash text-lg"></i></button></td>
+                        </tr>
+                    `;
+                });
+            } catch (e) { console.error(e); }
+        }
+
+        document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                username: document.getElementById('newUsername').value,
+                password: document.getElementById('newPassword').value,
+                fullname: document.getElementById('newFullname').value,
+                role: document.getElementById('newRole').value
+            };
+            await fetch(`${API_URL}/users`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)});
+            document.getElementById('addUserForm').reset();
+            Toast.fire({ icon: 'success', title: 'User berhasil ditambahkan' });
+            fetchUsers();
+        });
+
+        async function deleteUser(id) {
+            const result = await Swal.fire({title: 'Hapus user ini?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#d33', confirmButtonText: 'Hapus'});
+            if(result.isConfirmed) {
+                await fetch(`${API_URL}/users/${id}`, {method: 'DELETE'});
+                Toast.fire({ icon: 'success', title: 'User dihapus' });
+                fetchUsers();
+            }
+        }
+
+        // --- 3. UI HELPER ---
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            sidebar.classList.toggle('sidebar-collapsed');
+            if (sidebar.classList.contains('sidebar-collapsed')) {
+                sidebar.classList.remove('w-64');
+                document.getElementById('menu-data').classList.add('hidden');
+                document.getElementById('menu-account').classList.add('hidden');
+                document.getElementById('arrow-menu-data').classList.remove('rotate-180');
+                document.getElementById('arrow-menu-account').classList.remove('rotate-180');
+            } else {
+                sidebar.classList.add('w-64');
+            }
+        }
+
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('live-date').innerText = now.toLocaleDateString('id-ID', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+            document.getElementById('live-time').innerText = now.toLocaleTimeString('id-ID', {hour:'2-digit', minute:'2-digit', second:'2-digit'}).replace(/\./g, ':');
+        }
+        setInterval(updateClock, 1000);
+
+        function toggleMenu(id) {
+            const sidebar = document.getElementById('sidebar');
+            if(sidebar.classList.contains('sidebar-collapsed')) toggleSidebar();
+            document.getElementById(id).classList.toggle('hidden');
+            document.getElementById('arrow-' + id).classList.toggle('rotate-180');
+        }
+
+        function switchView(viewName) {
+            ['dashboard', 'input', 'database', 'users'].forEach(v => document.getElementById('view-' + v).classList.add('hidden'));
+            document.getElementById('view-' + viewName).classList.remove('hidden');
+            
+            document.getElementById('nav-dashboard').classList.remove('bg-blue-50', 'text-blue-600');
+            document.querySelectorAll('nav button').forEach(b => b.classList.remove('text-blue-600', 'bg-blue-50'));
+            
+            if(viewName === 'dashboard') {
+                document.getElementById('nav-dashboard').classList.add('bg-blue-50', 'text-blue-600');
+                fetchDocuments();
+            } else if (viewName === 'input') {
+                document.getElementById('nav-input').classList.add('text-blue-600', 'bg-blue-50');
+            } else if (viewName === 'database') {
+                document.getElementById('nav-database').classList.add('text-blue-600', 'bg-blue-50');
+                fetchDocuments();
+            } else if (viewName === 'users') {
+                document.getElementById('nav-users').classList.add('text-blue-600', 'bg-blue-50');
+                fetchUsers();
+            }
+        }
+
+        // --- 4. DATA LOGIC ---
+        async function fetchDocuments() {
+            try {
+                const response = await fetch(`${API_URL}/documents`);
+                allDocumentsData = await response.json();
+                applyFilter();
+                renderDashboardStats(allDocumentsData);
+            } catch (error) { console.error("Error Fetch:", error); }
+        }
+
+        function renderDashboardStats(docs) {
+            document.getElementById('count-schedule').innerText = docs.filter(d => d.jenis === 'Schedule').length;
+            document.getElementById('count-important').innerText = docs.filter(d => d.jenis === 'Important').length;
+            document.getElementById('count-urgent').innerText = docs.filter(d => d.jenis === 'Urgent').length;
+            document.getElementById('count-deliver').innerText = docs.filter(d => d.status_notulen === 'Deliver').length;
+            document.getElementById('count-revision').innerText = docs.filter(d => d.status_notulen === 'Revision').length;
+            document.getElementById('count-drafting').innerText = docs.filter(d => d.status_notulen === 'Drafting').length;
+            document.getElementById('count-signing').innerText = docs.filter(d => d.status_notulen === 'Signing').length;
+            
+            // Render Tahun
+            const yearCounts = {};
+            docs.forEach(doc => {
+                if(doc.tanggal_notulen) {
+                    const year = doc.tanggal_notulen.substring(0, 4);
+                    yearCounts[year] = (yearCounts[year] || 0) + 1;
+                }
+            });
+            const container = document.getElementById('year-cards-container');
+            container.innerHTML = '';
+            Object.keys(yearCounts).sort().reverse().forEach(year => {
+                container.innerHTML += `<div class="bg-white rounded-xl shadow-sm p-5 border-l-[6px] border-[#84cc16] h-28 flex flex-col justify-center hover:shadow-md transition"><p class="text-base font-bold text-gray-600">${year}</p><h4 class="text-4xl font-bold text-[#84cc16]">${yearCounts[year]}</h4></div>`;
+            });
+
+            // 5. RENDER CHART.JS (Visual)
+            const draft = docs.filter(d => d.status_notulen === 'Drafting').length;
+            const rev = docs.filter(d => d.status_notulen === 'Revision').length;
+            const sign = docs.filter(d => d.status_notulen === 'Signing').length;
+            const del = docs.filter(d => d.status_notulen === 'Deliver').length;
+
+            const ctx = document.getElementById('statusChart').getContext('2d');
+            
+            if (chartInstance) chartInstance.destroy(); // Hapus chart lama agar tidak tumpuk
+
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Drafting', 'Revision', 'Signing', 'Delivered'],
+                    datasets: [{
+                        data: [draft, rev, sign, del],
+                        backgroundColor: ['#ef4444', '#fbbf24', '#3b82f6', '#84cc16'],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { font: { family: 'Inter' } } }
+                    }
+                }
+            });
+        }
+
+        function renderTable(docs) {
+            const tbody = document.getElementById('document-table-body');
+            tbody.innerHTML = '';
+            docs.forEach(doc => {
+                const dateStr = doc.tanggal_notulen ? new Date(doc.tanggal_notulen).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
+                
+                let typeColor = doc.jenis === 'Urgent' ? 'bg-red-100 text-red-700' : (doc.jenis === 'Important' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700');
+                let statusColor = 'bg-gray-100';
+                if(doc.status_notulen === 'Deliver') statusColor = 'bg-green-100 text-green-700';
+                if(doc.status_notulen === 'Revision') statusColor = 'bg-yellow-100 text-yellow-700';
+                if(doc.status_notulen === 'Signing') statusColor = 'bg-blue-100 text-blue-700';
+
+                const docString = JSON.stringify(doc).replace(/'/g, "&#39;");
+
+                tbody.innerHTML += `
+                    <tr class="hover:bg-gray-50 transition border-b border-gray-100 group">
+                        <td class="p-5 font-mono text-gray-600 font-semibold">${doc.nomor_notulen}</td>
+                        <td class="p-5 font-medium text-gray-900">${doc.nama_notulen}</td>
+                        <td class="p-5 text-gray-500">${dateStr}</td>
+                        <td class="p-5"><span class="${typeColor} px-3 py-1 rounded-full text-xs font-bold">${doc.jenis}</span></td>
+                        <td class="p-5"><span class="${statusColor} px-3 py-1 rounded-full text-xs font-bold uppercase">${doc.status_notulen}</span></td>
+                        <td class="p-5 flex items-center justify-center gap-2">
+                            <button onclick='openEditModal(${docString})' class="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition"><i class="ph ph-pencil-simple text-xl"></i></button>
+                            <button onclick="deleteDocument(${doc.id_notulen})" class="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition"><i class="ph ph-trash text-xl"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Logic Filter & Sort
+        function applyFilter() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            const type = document.getElementById('filterJenis').value;
+            const status = document.getElementById('filterStatus').value;
+            const start = document.getElementById('startDate').value;
+            const end = document.getElementById('endDate').value;
+
+            const filtered = allDocumentsData.filter(d => {
+                const matchSearch = d.nomor_notulen.toLowerCase().includes(term) || d.nama_notulen.toLowerCase().includes(term);
+                const matchType = type === "" || d.jenis === type;
+                const matchStatus = status === "" || d.status_notulen === status;
+                let matchDate = true;
+                if(start || end) {
+                    const date = new Date(d.tanggal_notulen.split('T')[0]);
+                    if(start && date < new Date(start)) matchDate = false;
+                    if(end && date > new Date(end)) matchDate = false;
+                }
+                return matchSearch && matchType && matchStatus && matchDate;
+            });
+            renderTable(filtered);
+            const msg = document.getElementById('no-data-message');
+            filtered.length === 0 ? msg.classList.remove('hidden') : msg.classList.add('hidden');
+        }
+
+        function resetFilter() {
+            document.getElementById('searchInput').value = '';
+            document.getElementById('filterJenis').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('startDate').value = '';
+            document.getElementById('endDate').value = '';
+            applyFilter();
+        }
+
+        function sortData(col) {
+            if(currentSort.column === col) currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            else { currentSort.column = col; currentSort.direction = 'asc'; }
+            
+            ['nomor_notulen','nama_notulen','tanggal_notulen','jenis','status_notulen'].forEach(c => document.getElementById('icon-'+c).className = "ph ph-arrows-down-up text-gray-400");
+            document.getElementById('icon-'+col).className = currentSort.direction === 'asc' ? "ph ph-arrow-up text-blue-600 font-bold" : "ph ph-arrow-down text-blue-600 font-bold";
+
+            allDocumentsData.sort((a,b) => {
+                let vA = a[col]?a[col].toString().toLowerCase():"", vB = b[col]?b[col].toString().toLowerCase():"";
+                if(col === 'tanggal_notulen') { vA=new Date(a[col]); vB=new Date(b[col]); }
+                if(vA < vB) return currentSort.direction === 'asc' ? -1 : 1;
+                if(vA > vB) return currentSort.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+            applyFilter();
+        }
+
+        document.getElementById('addDocForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            // Loading State Button
+            const btn = document.getElementById('btnSaveDoc');
+            const oldText = btn.innerText;
+            btn.innerText = 'Menyimpan...';
+            btn.disabled = true;
+
+            const data = {
+                nomor_notulen: document.getElementById('inputNomor').value,
+                nama_notulen: document.getElementById('inputNama').value,
+                tanggal_notulen: document.getElementById('inputTanggal').value,
+                jenis: document.getElementById('inputJenis').value,
+                status_notulen: document.getElementById('inputStatus').value
+            };
+            try {
+                await fetch(`${API_URL}/documents`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+                document.getElementById('addDocForm').reset();
+                Toast.fire({ icon: 'success', title: 'Data tersimpan!' });
+                fetchDocuments();
+            } catch (error) { Swal.fire('Error', error.message, 'error'); }
+            
+            // Reset Button
+            btn.innerText = oldText;
+            btn.disabled = false;
+        });
+
+        function openEditModal(doc) {
+            document.getElementById('editId').value = doc.id_notulen;
+            document.getElementById('editNomor').value = doc.nomor_notulen;
+            document.getElementById('editNama').value = doc.nama_notulen;
+            document.getElementById('editTanggal').value = doc.tanggal_notulen.split('T')[0];
+            document.getElementById('editJenis').value = doc.jenis;
+            document.getElementById('editStatus').value = doc.status_notulen;
+            document.getElementById('editModal').classList.remove('hidden');
+        }
+        function closeEditModal() { document.getElementById('editModal').classList.add('hidden'); }
+
+        document.getElementById('editForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('editId').value;
+            const data = {
+                nomor_notulen: document.getElementById('editNomor').value,
+                nama_notulen: document.getElementById('editNama').value,
+                tanggal_notulen: document.getElementById('editTanggal').value,
+                jenis: document.getElementById('editJenis').value,
+                status_notulen: document.getElementById('editStatus').value
+            };
+            
+            const result = await Swal.fire({
+                title: 'Simpan perubahan?',
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Simpan',
+                confirmButtonColor: '#3b82f6'
+            });
+
+            if(result.isConfirmed) {
+                await fetch(`${API_URL}/documents/${id}`, { method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) });
+                closeEditModal();
+                Toast.fire({ icon: 'success', title: 'Update berhasil' });
+                fetchDocuments();
+            }
+        });
+
+        async function deleteDocument(id) {
+            const result = await Swal.fire({ title: 'Hapus dokumen?', icon: 'warning', showCancelButton: true, confirmButtonColor: '#ef4444', confirmButtonText: 'Hapus' });
+            if(result.isConfirmed) {
+                await fetch(`${API_URL}/documents/${id}`, { method: 'DELETE' });
+                Toast.fire({ icon: 'success', title: 'Dokumen dihapus' });
+                fetchDocuments();
+            }
+        }
+
+        function exportToExcel() {
+            const data = allDocumentsData.map(d => ({ "Nomor": d.nomor_notulen, "Nama": d.nama_notulen, "Tgl": d.tanggal_notulen.split('T')[0], "Jenis": d.jenis, "Status": d.status_notulen }));
+            const ws = XLSX.utils.json_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Data");
+            XLSX.writeFile(wb, "DataNotulen.xlsx");
+            Toast.fire({ icon: 'success', title: 'Excel diunduh!' });
+        }
+
+        checkSession();
+    </script>
+</body>
+</html>
