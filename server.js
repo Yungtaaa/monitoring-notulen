@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise');
-const path = require('path'); // Tambahan module path untuk keamanan file
+const path = require('path');
 
 const app = express();
 
@@ -10,31 +10,42 @@ app.use(cors());
 app.use(express.json());
 
 // =======================
-// 🌐 KONFIGURASI FRONTEND (PENTING UNTUK RAILWAY)
+// 🌐 KONFIGURASI FRONTEND
 // =======================
-// Baris ini membuat server bisa membaca file dashboard.html dan css/js lain di folder yang sama
-app.use(express.static(__dirname)); 
+app.use(express.static(__dirname));
 
 // =======================
-// 🗄️ KONEKSI DATABASE (SMART CONFIG)
+// 🗄️ KONEKSI DATABASE (SMART CONFIG v2 - GCP SUPPORT)
 // =======================
+// Kita siapkan konfigurasi dasar dulu
 const dbConfig = {
-    // Server akan cek: "Apakah aku sedang di Railway?"
-    // Jika YA (ada process.env), pakai data Railway.
-    // Jika TIDAK, pakai data Localhost (XAMPP).
-    host: process.env.MYSQLHOST || 'localhost',
     user: process.env.MYSQLUSER || 'root',
-    password: process.env.MYSQLPASSWORD || '',
-    database: process.env.MYSQLDATABASE || 'database notulen',
-    port: process.env.MYSQLPORT || 3306
+    // Gunakan password dari environment variable, atau fallback ke password yang kamu berikan
+    password: process.env.MYSQLPASSWORD || 'Jakarta@2025', 
+    database: process.env.MYSQLDATABASE || 'railway', // Pastikan nama DB di Cloud SQL adalah 'railway'
 };
 
+// LOGIKA PINTAR:
+// Cek apakah kita punya 'INSTANCE_CONNECTION_NAME' (tanda kita ada di Google Cloud)
+if (process.env.INSTANCE_CONNECTION_NAME) {
+    // JIKA DI GOOGLE CLOUD: Pakai jalur Socket (Kabel Khusus)
+    console.log(`🔌 Menghubungkan lewat Socket: ${process.env.INSTANCE_CONNECTION_NAME}`);
+    dbConfig.socketPath = `/cloudsql/${process.env.INSTANCE_CONNECTION_NAME}`;
+} else {
+    // JIKA DI LAPTOP/RAILWAY: Pakai jalur Host/IP biasa
+    console.log('💻 Menghubungkan lewat TCP Host (Laptop/Local)');
+    dbConfig.host = process.env.MYSQLHOST || 'localhost';
+    dbConfig.port = process.env.MYSQLPORT || 3306;
+}
+
 async function queryDatabase(query, params) {
+    // Buat koneksi baru setiap ada request (Stateless)
     const connection = await mysql.createConnection(dbConfig);
     try {
         const [results, ] = await connection.execute(query, params);
         return results;
     } finally {
+        // Wajib tutup koneksi setelah selesai agar server tidak berat
         connection.end();
     }
 }
@@ -42,8 +53,6 @@ async function queryDatabase(query, params) {
 // =======================
 // 🔐 FITUR AUTH (LOGIN)
 // =======================
-
-// 1. LOGIN CHECK
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
@@ -61,11 +70,11 @@ app.post('/api/login', async (req, res) => {
             res.status(401).json({ success: false, message: 'Username atau Password salah!' });
         }
     } catch (err) {
+        console.error("Login Error:", err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// 2. AMBIL SEMUA USER
 app.get('/api/users', async (req, res) => {
     try {
         const users = await queryDatabase("SELECT id, username, fullname, role FROM users");
@@ -75,7 +84,6 @@ app.get('/api/users', async (req, res) => {
     }
 });
 
-// 3. TAMBAH USER BARU
 app.post('/api/users', async (req, res) => {
     try {
         const { username, password, fullname, role } = req.body;
@@ -87,7 +95,6 @@ app.post('/api/users', async (req, res) => {
     }
 });
 
-// 4. HAPUS USER
 app.delete('/api/users/:id', async (req, res) => {
     try {
         await queryDatabase("DELETE FROM users WHERE id = ?", [req.params.id]);
@@ -97,12 +104,9 @@ app.delete('/api/users/:id', async (req, res) => {
     }
 });
 
-
 // =======================
 // 📄 FITUR NOTULEN
 // =======================
-
-// READ
 app.get('/api/documents', async (req, res) => {
     try {
         const docs = await queryDatabase('SELECT * FROM `tabel notulen` ORDER BY id_notulen DESC');
@@ -112,7 +116,6 @@ app.get('/api/documents', async (req, res) => {
     }
 });
 
-// CREATE
 app.post('/api/documents', async (req, res) => {
     try {
         const { nomor_notulen, nama_notulen, tanggal_notulen, jenis, status_notulen } = req.body;
@@ -124,7 +127,6 @@ app.post('/api/documents', async (req, res) => {
     }
 });
 
-// UPDATE
 app.put('/api/documents/:id', async (req, res) => {
     try {
         const { id } = req.params;
@@ -137,7 +139,6 @@ app.put('/api/documents/:id', async (req, res) => {
     }
 });
 
-// DELETE
 app.delete('/api/documents/:id', async (req, res) => {
     try {
         const sql = 'DELETE FROM `tabel notulen` WHERE id_notulen = ?';
@@ -149,9 +150,8 @@ app.delete('/api/documents/:id', async (req, res) => {
 });
 
 // =======================
-// 🚀 ROUTING HALAMAN UTAMA (PENYELESAI MASALAH "Cannot GET /")
+// 🚀 ROUTING HALAMAN UTAMA
 // =======================
-// Jika user membuka halaman utama ('/'), kirim file dashboard.html
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'dashboard.html'));
 });
@@ -159,7 +159,7 @@ app.get('/', (req, res) => {
 // =======================
 // 🔌 START SERVER
 // =======================
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080; // Cloud Run default port is 8080
 app.listen(PORT, () => {
     console.log(`🚀 Server berjalan di port ${PORT}`);
 });
