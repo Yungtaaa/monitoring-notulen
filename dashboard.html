@@ -1201,35 +1201,45 @@ function previewImage(event) {
     }
 }
 
-// --- FUNGSI SCAN NOTA DENGAN SDK RESMI (PASTI JALAN) ---
+// --- KODE FINAL SCAN NOTA (SDK RESMI) ---
 async function processReceipt() {
-    // 1. Loading UI
     const btn = document.getElementById('btn-scan');
     const originalText = btn.innerHTML;
-    btn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i> <span>Sedang Menghubungi Google...</span>';
+    
+    // UI Loading
+    btn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i> <span>Menghubungi AI...</span>';
     btn.disabled = true;
 
     try {
-        // --- STEP PENTING: Import SDK Resmi Google secara langsung ---
-        // Kita pakai "esm.run" agar bisa jalan di browser tanpa install npm
+        // 1. Cek Koneksi Internet Dulu
+        if (!navigator.onLine) {
+            throw new Error("Laptop Anda tidak terhubung ke internet.");
+        }
+
+        // 2. Import SDK Google
         const { GoogleGenerativeAI } = await import("https://esm.run/@google/generative-ai");
 
-        // Masukkan API Key Baru Anda disini
+        // ⚠️ PASTE API KEY BARU ANDA DISINI
         const API_KEY = "AIzaSyCqmBIqxmy-8X9P4lHJqsxuT0hodqbxZ70"; 
 
-        // Inisialisasi AI
+        if (API_KEY.includes("ISI_API_KEY") || API_KEY.length < 30) {
+            throw new Error("API Key belum diisi dengan benar.");
+        }
+
+        // Setup AI Model
         const genAI = new GoogleGenerativeAI(API_KEY);
-        // Kita gunakan model "gemini-1.5-flash" yang paling ringan & cepat buat gambar
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-        // Ambil File Gambar
+        // Ambil Gambar
         const fileInput = document.getElementById('fileInput');
-        if (!fileInput.files[0]) throw new Error("Pilih foto nota dulu ya.");
+        if (!fileInput.files[0]) throw new Error("Pilih foto nota dulu.");
         
         const file = fileInput.files[0];
         const base64Data = await convertToBase64(file);
-        
-        // Siapkan Gambar untuk dikirim ke SDK
+
+        // Prompt
+        const prompt = "Baca struk ini. Ambil nama item dan harga. Outputkan HANYA JSON Array murni. Contoh: [{\"item\": \"Barang A\", \"price\": 5000}]. Jangan pakai markdown.";
+
         const imagePart = {
             inlineData: {
                 data: base64Data.split(',')[1],
@@ -1237,16 +1247,14 @@ async function processReceipt() {
             }
         };
 
-        const prompt = "Kamu adalah mesin kasir. Analisa struk belanja ini. Ambil nama item dan harganya. Keluarkan output HANYA JSON Array murni. Contoh: [{\"item\": \"Sabun\", \"price\": 5000}]. Jangan pakai markdown ```json.";
-
-        // --- TEMBAK KE GOOGLE ---
+        // Kirim
         const result = await model.generateContent([prompt, imagePart]);
         const response = await result.response;
         const text = response.text();
 
-        console.log("Respon Asli AI:", text); // Cek console untuk debug
+        console.log("Respon AI:", text);
 
-        // Bersihkan hasil JSON
+        // Bersihkan JSON
         let cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
         const firstBracket = cleanJson.indexOf('[');
         const lastBracket = cleanJson.lastIndexOf(']');
@@ -1254,26 +1262,29 @@ async function processReceipt() {
         if (firstBracket !== -1 && lastBracket !== -1) {
             cleanJson = cleanJson.substring(firstBracket, lastBracket + 1);
             currentReceiptData = JSON.parse(cleanJson);
-            
-            // Tampilkan ke tabel
             renderReceiptResult(currentReceiptData);
-            Toast.fire({ icon: 'success', title: 'Berhasil scan nota!' });
+            
+            Toast.fire({ icon: 'success', title: 'Berhasil!' });
             document.getElementById('btn-save-receipt').classList.remove('hidden');
         } else {
-            throw new Error("Gagal membaca format data harga dari gambar.");
+            throw new Error("AI tidak menemukan daftar harga yang valid.");
         }
 
     } catch (error) {
-        console.error("Error Full:", error);
+        console.error("Error Lengkap:", error);
         
-        // Tampilkan pesan error yang manusiawi
-        let pesanError = error.message;
-        if (error.message.includes("400")) pesanError = "Format gambar tidak didukung atau API Key salah.";
-        if (error.message.includes("fetch")) pesanError = "Gagal koneksi internet ke Google.";
+        let pesan = error.message;
+        // Deteksi Error Spesifik
+        if (pesan.includes("Failed to fetch") || pesan.includes("NetworkError")) {
+            pesan = "Koneksi ke Google DI BLOKIR oleh jaringan/WiFi atau AdBlocker.";
+        }
+        if (pesan.includes("403") || pesan.includes("key")) {
+            pesan = "API Key tidak valid atau expired.";
+        }
 
         Swal.fire({
             title: 'Gagal',
-            text: pesanError,
+            text: pesan,
             icon: 'error'
         });
     } finally {
