@@ -1201,17 +1201,15 @@ function previewImage(event) {
     }
 }
 
-// --- PERBAIKAN FUNGSI PROCESS RECEIPT ---
-
 async function processReceipt() {
-    // 1. Loading UI & Persiapan
+    // 1. Loading UI
     const btn = document.getElementById('btn-scan');
     const originalText = btn.innerHTML;
     btn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i> <span>Menganalisa Nota...</span>';
     btn.disabled = true;
 
     try {
-        // Pastikan API Key Anda sudah benar di sini (tanpa spasi tambahan)
+        // API Key Anda (Pastikan tidak ada spasi)
         const API_KEY = "AIzaSyCqmBIqxmy-8X9P4lHJqsxuT0hodqbxZ70"; 
         
         const fileInput = document.getElementById('fileInput');
@@ -1221,19 +1219,19 @@ async function processReceipt() {
         const base64Image = await convertToBase64(file);
         const cleanBase64 = base64Image.split(',')[1]; 
 
-        // 2. Payload Request (Prompt diperjelas agar AI patuh)
+        // 2. Payload Request
         const payload = {
             contents: [{
                 parts: [
-                    { text: "Kamu adalah mesin OCR JSON. Tugasmu hanya satu: baca gambar struk ini, dan outputkan JSON Array berisi item dan harga. JANGAN MENULIS KALIMAT APAPUN selain JSON. Format: [{\"item\": \"Nama Barang\", \"price\": 10000}]" },
+                    { text: "Analisa gambar ini. Ekstrak nama barang dan harga dalam format JSON Array. Contoh: [{\"item\": \"Nama Barang\", \"price\": 10000}]. Jangan ada teks lain selain JSON." },
                     { inline_data: { mime_type: file.type || "image/jpeg", data: cleanBase64 } }
                 ]
             }]
         };
 
-        // 3. Request ke Gemini API
-        // Perbaikan: Tambahkan '-latest' di belakang nama model
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro-vision:generateContent?key=${API_KEY}`, {
+        // 3. Request ke Gemini API (MENGGUNAKAN MODEL 'gemini-1.5-flash')
+        // Perhatikan URL ini sudah diganti ke versi 1.5-flash yang stabil
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -1241,37 +1239,40 @@ async function processReceipt() {
 
         const data = await response.json();
 
-        // Cek jika Google memberikan Error API (Misal: Key Salah / Quota Habis)
+        // Cek Error dari Google
         if (data.error) {
+            console.error("Google API Error:", data.error);
             throw new Error(data.error.message || "Terjadi kesalahan pada API Google.");
         }
 
-        // 4. Parsing Hasil (Logika Pembersih JSON Lebih Kuat)
+        // 4. Parsing Hasil
         if (!data.candidates || !data.candidates[0].content) {
             throw new Error("AI tidak dapat mendeteksi teks pada gambar ini.");
         }
 
         const rawText = data.candidates[0].content.parts[0].text;
-        console.log("Respon Asli AI:", rawText); // Cek Console (F12) untuk debug
-
-        // Cari kurung siku '[' pertama dan ']' terakhir untuk mengisolasi JSON
-        const firstBracket = rawText.indexOf('[');
-        const lastBracket = rawText.lastIndexOf(']');
+        
+        // Bersihkan Markdown JSON (```json ... ```) jika ada
+        let jsonStr = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        // Cari kurung siku '[' pertama dan ']' terakhir untuk memastikan format array
+        const firstBracket = jsonStr.indexOf('[');
+        const lastBracket = jsonStr.lastIndexOf(']');
 
         if (firstBracket !== -1 && lastBracket !== -1) {
-            const jsonStr = rawText.substring(firstBracket, lastBracket + 1);
+            jsonStr = jsonStr.substring(firstBracket, lastBracket + 1);
             currentReceiptData = JSON.parse(jsonStr);
             
             renderReceiptResult(currentReceiptData);
             Toast.fire({ icon: 'success', title: 'Nota berhasil dibaca!' });
             document.getElementById('btn-save-receipt').classList.remove('hidden');
         } else {
-            throw new Error("Format nota tidak dikenali. Pastikan foto jelas dan berisi daftar harga.");
+            console.log("Raw Response:", rawText); // Cek console jika parsing gagal
+            throw new Error("Format nota tidak terbaca sebagai data harga.");
         }
 
     } catch (error) {
         console.error("Error Detail:", error);
-        // Tampilkan pesan error yang SPESIFIK agar kita tahu salahnya dimana
         Swal.fire({
             title: 'Gagal Memproses',
             text: error.message,
