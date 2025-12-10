@@ -408,6 +408,52 @@
     </div>
 </div>
 
+<div id="editTaskModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform scale-100 transition-transform">
+        <div class="flex justify-between items-center mb-6 border-b pb-2">
+            <h3 class="text-xl font-bold text-black">Edit Data & Progress</h3>
+            <button onclick="closeEditTaskModal()" class="text-gray-400 hover:text-red-500"><i class="ph ph-x text-2xl"></i></button>
+        </div>
+        <form id="editTaskForm" class="space-y-4">
+            <input type="hidden" id="editTaskId">
+            
+            <div>
+                <label class="block text-sm font-bold mb-1 text-gray-700">Nama Tugas</label>
+                <input type="text" id="editTaskName" required class="w-full bg-gray-50 border border-gray-200 rounded p-2.5 focus:ring-2 focus:ring-blue-500">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-bold mb-1 text-gray-700">Sumber Notulen</label>
+                <select id="editTaskSource" required class="w-full bg-gray-50 border border-gray-200 rounded p-2.5 focus:ring-2 focus:ring-blue-500">
+                    </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-bold mb-1 text-gray-700">PIC</label>
+                    <input type="text" id="editTaskPic" required class="w-full bg-gray-50 border border-gray-200 rounded p-2.5">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-1 text-gray-700">Deadline</label>
+                    <input type="date" id="editTaskDeadline" required class="w-full bg-gray-50 border border-gray-200 rounded p-2.5">
+                </div>
+            </div>
+
+            <div class="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                <div class="flex justify-between mb-2">
+                    <label class="block text-sm font-bold text-blue-800">Update Progress (%)</label>
+                    <span id="editTaskProgressVal" class="text-sm font-bold text-blue-600">0%</span>
+                </div>
+                <input type="range" id="editTaskProgress" min="0" max="100" class="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-600" oninput="document.getElementById('editTaskProgressVal').innerText = this.value + '%'">
+            </div>
+
+            <div class="pt-4 flex justify-end gap-2">
+                <button type="button" onclick="closeEditTaskModal()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium">Batal</button>
+                <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-lg">Simpan Perubahan</button>
+            </div>
+        </form>
+    </div>
+</div>
 
     <script>
         const API_URL = '/api';
@@ -888,6 +934,97 @@ document.getElementById('addTaskForm').addEventListener('submit', function(e) {
         showConfirmButton: false
     });
 });
+
+// --- LOGIKA EDIT TUGAS (REVISI) ---
+
+// 1. Fungsi Membuka Modal Edit & Mengisi Data Lama
+function updateTask(id) {
+    const item = actionItems.find(i => i.id === id);
+    if (!item) return;
+
+    // Isi ID ke hidden input agar sistem tahu mana yang diedit
+    document.getElementById('editTaskId').value = item.id;
+    
+    // Isi Form dengan Data Lama
+    document.getElementById('editTaskName').value = item.task;
+    document.getElementById('editTaskPic').value = item.pic;
+    document.getElementById('editTaskDeadline').value = item.deadline;
+    
+    // Setup Slider Progress
+    document.getElementById('editTaskProgress').value = item.progress;
+    document.getElementById('editTaskProgressVal').innerText = item.progress + '%';
+
+    // Isi Dropdown Sumber (Logic sama seperti Add Modal)
+    const select = document.getElementById('editTaskSource');
+    select.innerHTML = '<option value="">-- Pilih Notulen --</option>';
+    
+    if (typeof allDocumentsData !== 'undefined' && allDocumentsData.length > 0) {
+        allDocumentsData.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.nama_notulen;
+            option.text = `${doc.nomor_notulen} - ${doc.nama_notulen}`;
+            // Tandai opsi yang sedang terpilih
+            if(doc.nama_notulen === item.source) option.selected = true; 
+            select.appendChild(option);
+        });
+    } else {
+        // Fallback jika database notulen kosong
+        const option = document.createElement('option');
+        option.value = item.source;
+        option.text = item.source;
+        option.selected = true;
+        select.appendChild(option);
+    }
+
+    // Tampilkan Modal
+    document.getElementById('editTaskModal').classList.remove('hidden');
+}
+
+// 2. Fungsi Tutup Modal Edit
+function closeEditTaskModal() {
+    document.getElementById('editTaskModal').classList.add('hidden');
+}
+
+// 3. Logic Simpan Perubahan (Saat Tombol Simpan Diklik)
+document.getElementById('editTaskForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const id = parseInt(document.getElementById('editTaskId').value);
+    const itemIndex = actionItems.findIndex(i => i.id === id);
+
+    if (itemIndex > -1) {
+        // Update Data di Array dengan value baru dari form
+        actionItems[itemIndex].task = document.getElementById('editTaskName').value;
+        actionItems[itemIndex].source = document.getElementById('editTaskSource').value;
+        actionItems[itemIndex].pic = document.getElementById('editTaskPic').value;
+        actionItems[itemIndex].deadline = document.getElementById('editTaskDeadline').value;
+        
+        // Update Logic Status Berdasarkan Progress Baru
+        const newProgress = parseInt(document.getElementById('editTaskProgress').value);
+        actionItems[itemIndex].progress = newProgress;
+
+        if(newProgress === 100) {
+            actionItems[itemIndex].status = "Done";
+        } else if(newProgress < 100 && actionItems[itemIndex].status === "Done") {
+            // Jika status tadinya Done tapi progress diturunkan, balik jadi On Progress
+            actionItems[itemIndex].status = "On Progress";
+        }
+        
+        // Simpan ke LocalStorage & Render Ulang Tabel
+        saveToLocal();
+        renderTracker();
+        closeEditTaskModal();
+
+        Swal.fire({
+            icon: 'success',
+            title: 'Berhasil Diupdate',
+            text: 'Informasi dan progress tugas telah diperbarui!',
+            timer: 1500,
+            showConfirmButton: false
+        });
+    }
+});
+
 
 // Logic Delete Tugas
 async function deleteTaskItem(id) {
