@@ -1201,42 +1201,37 @@ function previewImage(event) {
     }
 }
 
-// FUNGSI UTAMA: Kirim Gambar ke AI
+// --- PERBAIKAN FUNGSI PROCESS RECEIPT ---
+
 async function processReceipt() {
-    // 1. Loading UI
+    // 1. Loading UI & Persiapan
     const btn = document.getElementById('btn-scan');
     const originalText = btn.innerHTML;
     btn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i> <span>Menganalisa Nota...</span>';
     btn.disabled = true;
 
     try {
-        /* PERHATIAN: Di lingkungan Produksi/Kerja Nyata, 
-           JANGAN menaruh API KEY di frontend (HTML) seperti ini karena tidak aman.
-           Harusnya request dikirim ke Backend Anda (Python/NodeJS) baru ke AI.
-           
-           Tapi untuk keperluan PROTOTYPE/DEMO KULIAH, Anda bisa pakai cara ini.
-           Dapatkan API Key Gratis di: https://aistudio.google.com/
-        */
+        // Pastikan API Key Anda sudah benar di sini (tanpa spasi tambahan)
+        const API_KEY = "AIzaSyCqmBIqxmy-8X9P4lHJqsxuT0hodqbxZ70"; 
         
-        const API_KEY = "AIzaSyCqmBIqxmy-8X9P4lHJqsxuT0hodqbxZ70"; // <--- ISI API KEY DISINI
-        
-        // Ambil data Base64 gambar
         const fileInput = document.getElementById('fileInput');
+        if (!fileInput.files[0]) throw new Error("Silakan pilih gambar nota terlebih dahulu.");
+        
         const file = fileInput.files[0];
         const base64Image = await convertToBase64(file);
-        const cleanBase64 = base64Image.split(',')[1]; // Hapus header data:image...
+        const cleanBase64 = base64Image.split(',')[1]; 
 
-        // 2. Siapkan Payload untuk Gemini API
+        // 2. Payload Request (Prompt diperjelas agar AI patuh)
         const payload = {
             contents: [{
                 parts: [
-                    { text: "Analisa gambar nota ini. Ekstrak daftar item barang dan harganya. Keluarkan HANYA dalam format JSON Array murni tanpa markdown. Contoh format: [{\"item\": \"Nama Barang\", \"price\": 50000}]. Jangan ada teks lain." },
-                    { inline_data: { mime_type: "image/jpeg", data: cleanBase64 } }
+                    { text: "Kamu adalah mesin OCR JSON. Tugasmu hanya satu: baca gambar struk ini, dan outputkan JSON Array berisi item dan harga. JANGAN MENULIS KALIMAT APAPUN selain JSON. Format: [{\"item\": \"Nama Barang\", \"price\": 10000}]" },
+                    { inline_data: { mime_type: file.type || "image/jpeg", data: cleanBase64 } }
                 ]
             }]
         };
 
-        // 3. Tembak API Gemini (Versi Flash agar cepat)
+        // 3. Request ke Gemini API
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1244,25 +1239,45 @@ async function processReceipt() {
         });
 
         const data = await response.json();
-        
-        // 4. Parsing Hasil JSON dari AI
+
+        // Cek jika Google memberikan Error API (Misal: Key Salah / Quota Habis)
+        if (data.error) {
+            throw new Error(data.error.message || "Terjadi kesalahan pada API Google.");
+        }
+
+        // 4. Parsing Hasil (Logika Pembersih JSON Lebih Kuat)
+        if (!data.candidates || !data.candidates[0].content) {
+            throw new Error("AI tidak dapat mendeteksi teks pada gambar ini.");
+        }
+
         const rawText = data.candidates[0].content.parts[0].text;
-        // Bersihkan jika AI memberikan format ```json ... ```
-        const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-        
-        currentReceiptData = JSON.parse(cleanJson);
-        
-        renderReceiptResult(currentReceiptData);
-        Toast.fire({ icon: 'success', title: 'Nota berhasil dibaca!' });
-        
-        // Tampilkan tombol simpan
-        document.getElementById('btn-save-receipt').classList.remove('hidden');
+        console.log("Respon Asli AI:", rawText); // Cek Console (F12) untuk debug
+
+        // Cari kurung siku '[' pertama dan ']' terakhir untuk mengisolasi JSON
+        const firstBracket = rawText.indexOf('[');
+        const lastBracket = rawText.lastIndexOf(']');
+
+        if (firstBracket !== -1 && lastBracket !== -1) {
+            const jsonStr = rawText.substring(firstBracket, lastBracket + 1);
+            currentReceiptData = JSON.parse(jsonStr);
+            
+            renderReceiptResult(currentReceiptData);
+            Toast.fire({ icon: 'success', title: 'Nota berhasil dibaca!' });
+            document.getElementById('btn-save-receipt').classList.remove('hidden');
+        } else {
+            throw new Error("Format nota tidak dikenali. Pastikan foto jelas dan berisi daftar harga.");
+        }
 
     } catch (error) {
-        console.error(error);
-        Swal.fire('Gagal', 'Gagal membaca nota. Pastikan foto jelas atau Cek API Key.', 'error');
+        console.error("Error Detail:", error);
+        // Tampilkan pesan error yang SPESIFIK agar kita tahu salahnya dimana
+        Swal.fire({
+            title: 'Gagal Memproses',
+            text: error.message,
+            icon: 'error',
+            confirmButtonText: 'Coba Lagi'
+        });
     } finally {
-        // Reset Button
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
