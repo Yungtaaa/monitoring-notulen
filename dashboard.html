@@ -252,6 +252,66 @@
                     </div>
                 </div>
 
+                <div id="view-scanner" class="hidden fade-in max-w-5xl mx-auto">
+    <h2 class="text-3xl font-bold mb-2 text-black">Scan Nota Otomatis</h2>
+    <p class="text-gray-500 mb-8">Upload foto nota/kwitansi, AI akan mendeteksi item dan harganya secara otomatis.</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+        
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+            <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:bg-gray-50 transition relative cursor-pointer" onclick="document.getElementById('fileInput').click()">
+                <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="previewImage(event)">
+                <div id="upload-placeholder">
+                    <i class="ph ph-camera text-4xl text-gray-400 mb-2"></i>
+                    <p class="font-bold text-gray-600">Klik untuk Upload Foto Nota</p>
+                    <p class="text-xs text-gray-400 mt-1">Format: JPG, PNG</p>
+                </div>
+                <img id="image-preview" class="hidden w-full h-64 object-contain rounded-lg mx-auto">
+            </div>
+
+            <button onclick="processReceipt()" id="btn-scan" disabled class="w-full mt-4 bg-gray-300 text-white font-bold py-3 rounded-lg transition flex items-center justify-center gap-2 cursor-not-allowed">
+                <i class="ph ph-magic-wand text-xl"></i>
+                <span>Ekstrak Data Nota</span>
+            </button>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 flex flex-col">
+            <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                <i class="ph ph-receipt text-blue-600"></i> Hasil Deteksi AI
+            </h3>
+            
+            <div class="flex-1 overflow-y-auto border border-gray-100 rounded-lg bg-gray-50 p-1 mb-4">
+                <table class="w-full text-sm text-left">
+                    <thead class="text-xs text-gray-500 uppercase bg-gray-100 border-b">
+                        <tr>
+                            <th class="p-3">Nama Item</th>
+                            <th class="p-3 text-right">Harga</th>
+                        </tr>
+                    </thead>
+                    <tbody id="receipt-results-body">
+                        <tr><td colspan="2" class="p-4 text-center text-gray-400 italic">Belum ada data...</td></tr>
+                    </tbody>
+                    <tfoot class="font-bold text-gray-800 border-t-2 border-gray-200 bg-white">
+                        <tr>
+                            <td class="p-3">TOTAL BAYAR</td>
+                            <td class="p-3 text-right text-blue-600" id="receipt-total">Rp 0</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <button onclick="saveReceiptToDB()" id="btn-save-receipt" class="hidden w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg transition shadow-md">
+                <i class="ph ph-check-circle"></i> Simpan ke Laporan
+            </button>
+        </div>
+    </div>
+</div>
+
+<button onclick="switchView('scanner')" id="nav-scanner" class="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-lg hover:bg-gray-50 transition text-left group text-gray-700">
+    <i class="ph ph-scan text-2xl shrink-0"></i> 
+    <span class="menu-text">Scan Nota</span>
+</button>
+
                 <div id="view-users" class="hidden fade-in max-w-5xl mx-auto">
                     <h2 class="text-3xl font-bold mb-6 text-black">Kelola Akun Pengguna</h2>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -614,7 +674,7 @@
         }
 
         function switchView(viewName) {
-            ['dashboard', 'input', 'database', 'users', 'tracker'].forEach(v => document.getElementById('view-' + v).classList.add('hidden'));
+            ['dashboard', 'input', 'database', 'users', 'tracker', 'scanner'].forEach(v => document.getElementById('view-' + v).classList.add('hidden'));
             document.getElementById('view-' + viewName).classList.remove('hidden');
             
             document.getElementById('nav-dashboard').classList.remove('bg-blue-50', 'text-blue-600');
@@ -1118,6 +1178,153 @@ function renderTracker() {
         `;
     });
 }
+
+// --- 6. LOGIKA SCANNER NOTA (AI VISION) ---
+
+let currentReceiptData = []; // Menyimpan hasil scan sementara
+
+// Fungsi Preview Gambar saat dipilih
+function previewImage(event) {
+    const file = event.target.files[0];
+    if(file){
+        const reader = new FileReader();
+        reader.onload = function(e){
+            document.getElementById('image-preview').src = e.target.result;
+            document.getElementById('image-preview').classList.remove('hidden');
+            document.getElementById('upload-placeholder').classList.add('hidden');
+            
+            // Aktifkan tombol scan
+            const btn = document.getElementById('btn-scan');
+            btn.disabled = false;
+            btn.classList.remove('bg-gray-300', 'cursor-not-allowed');
+            btn.classList.add('bg-blue-600', 'hover:bg-blue-700', 'shadow-lg');
+        }
+        reader.readAsDataURL(file);
+    }
+}
+
+// FUNGSI UTAMA: Kirim Gambar ke AI
+async function processReceipt() {
+    // 1. Loading UI
+    const btn = document.getElementById('btn-scan');
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<i class="ph ph-spinner animate-spin text-xl"></i> <span>Menganalisa Nota...</span>';
+    btn.disabled = true;
+
+    try {
+        /* PERHATIAN: Di lingkungan Produksi/Kerja Nyata, 
+           JANGAN menaruh API KEY di frontend (HTML) seperti ini karena tidak aman.
+           Harusnya request dikirim ke Backend Anda (Python/NodeJS) baru ke AI.
+           
+           Tapi untuk keperluan PROTOTYPE/DEMO KULIAH, Anda bisa pakai cara ini.
+           Dapatkan API Key Gratis di: https://aistudio.google.com/
+        */
+        
+        const API_KEY = "AIzaSyCqmBIqxmy-8X9P4lHJqsxuT0hodqbxZ70"; // <--- ISI API KEY DISINI
+        
+        // Ambil data Base64 gambar
+        const fileInput = document.getElementById('fileInput');
+        const file = fileInput.files[0];
+        const base64Image = await convertToBase64(file);
+        const cleanBase64 = base64Image.split(',')[1]; // Hapus header data:image...
+
+        // 2. Siapkan Payload untuk Gemini API
+        const payload = {
+            contents: [{
+                parts: [
+                    { text: "Analisa gambar nota ini. Ekstrak daftar item barang dan harganya. Keluarkan HANYA dalam format JSON Array murni tanpa markdown. Contoh format: [{\"item\": \"Nama Barang\", \"price\": 50000}]. Jangan ada teks lain." },
+                    { inline_data: { mime_type: "image/jpeg", data: cleanBase64 } }
+                ]
+            }]
+        };
+
+        // 3. Tembak API Gemini (Versi Flash agar cepat)
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${API_KEY}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+        
+        // 4. Parsing Hasil JSON dari AI
+        const rawText = data.candidates[0].content.parts[0].text;
+        // Bersihkan jika AI memberikan format ```json ... ```
+        const cleanJson = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        currentReceiptData = JSON.parse(cleanJson);
+        
+        renderReceiptResult(currentReceiptData);
+        Toast.fire({ icon: 'success', title: 'Nota berhasil dibaca!' });
+        
+        // Tampilkan tombol simpan
+        document.getElementById('btn-save-receipt').classList.remove('hidden');
+
+    } catch (error) {
+        console.error(error);
+        Swal.fire('Gagal', 'Gagal membaca nota. Pastikan foto jelas atau Cek API Key.', 'error');
+    } finally {
+        // Reset Button
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+    }
+}
+
+// Helper: Tampilkan Hasil di Tabel
+function renderReceiptResult(items) {
+    const tbody = document.getElementById('receipt-results-body');
+    tbody.innerHTML = '';
+    let total = 0;
+
+    items.forEach(i => {
+        // Bersihkan format harga jika AI memberikan string "Rp 50.000" jadi angka
+        let priceNum = typeof i.price === 'string' ? parseInt(i.price.replace(/[^0-9]/g, '')) : i.price;
+        
+        total += priceNum;
+
+        tbody.innerHTML += `
+            <tr class="border-b border-gray-100">
+                <td class="p-3 text-gray-700 font-medium">${i.item}</td>
+                <td class="p-3 text-right font-mono text-gray-600">Rp ${priceNum.toLocaleString('id-ID')}</td>
+            </tr>
+        `;
+    });
+
+    document.getElementById('receipt-total').innerText = `Rp ${total.toLocaleString('id-ID')}`;
+}
+
+// Helper: Convert File ke Base64
+function convertToBase64(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = error => reject(error);
+    });
+}
+
+// Simulasi Simpan ke DB
+function saveReceiptToDB() {
+    Swal.fire({
+        title: 'Simpan Data?',
+        text: `${currentReceiptData.length} item akan disimpan ke database pengeluaran.`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Ya, Simpan'
+    }).then((result) => {
+        if(result.isConfirmed) {
+            // Disini Anda bisa panggil fetch() ke API backend Anda
+            Toast.fire({ icon: 'success', title: 'Data tersimpan!' });
+            // Reset scan
+            document.getElementById('image-preview').classList.add('hidden');
+            document.getElementById('upload-placeholder').classList.remove('hidden');
+            document.getElementById('btn-save-receipt').classList.add('hidden');
+            document.getElementById('receipt-results-body').innerHTML = '<tr><td colspan="2" class="p-4 text-center text-gray-400 italic">Belum ada data...</td></tr>';
+            document.getElementById('receipt-total').innerText = 'Rp 0';
+        }
+    });
+}
+
 
 // Tambahkan case baru ke fungsi switchView yang sudah ada
 // (Copy fungsi switchView Anda yang lama, dan tambahkan baris ini di dalamnya)
