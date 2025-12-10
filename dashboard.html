@@ -370,6 +370,44 @@
             </form>
         </div>
     </div>
+<div id="addTaskModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50 transition-opacity">
+    <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 transform scale-100 transition-transform">
+        <div class="flex justify-between items-center mb-6 border-b pb-2">
+            <h3 class="text-xl font-bold text-black">Tambah Action Item Baru</h3>
+            <button onclick="closeTaskModal()" class="text-gray-400 hover:text-red-500"><i class="ph ph-x text-2xl"></i></button>
+        </div>
+        <form id="addTaskForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-bold mb-1 text-gray-700">Nama Tugas / Action Item</label>
+                <input type="text" id="taskName" required class="w-full bg-gray-50 border border-gray-200 rounded p-2.5 focus:ring-2 focus:ring-blue-500" placeholder="Contoh: Migrasi Database...">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-bold mb-1 text-gray-700">Sumber (Link ke Notulen)</label>
+                <select id="taskSource" required class="w-full bg-gray-50 border border-gray-200 rounded p-2.5 focus:ring-2 focus:ring-blue-500">
+                    <option value="">-- Pilih Notulen --</option>
+                    </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-bold mb-1 text-gray-700">PIC (Penanggung Jawab)</label>
+                    <input type="text" id="taskPic" required class="w-full bg-gray-50 border border-gray-200 rounded p-2.5" placeholder="Nama PIC">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold mb-1 text-gray-700">Deadline</label>
+                    <input type="date" id="taskDeadline" required class="w-full bg-gray-50 border border-gray-200 rounded p-2.5">
+                </div>
+            </div>
+
+            <div class="pt-4 flex justify-end gap-2">
+                <button type="button" onclick="closeTaskModal()" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg font-medium">Batal</button>
+                <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-bold shadow-lg">Simpan Tugas</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 
     <script>
         const API_URL = '/api';
@@ -783,90 +821,164 @@
 
         checkSession();
     
-// --- 5. LOGIKA TAMBAHAN: ACTION TRACKER (MODULAR) ---
+// --- 5. LOGIKA ACTION TRACKER (FINAL & TERINTEGRASI) ---
 
-// Data Mockup (Nanti bisa diganti fetch API)
-let actionItems = [
-    { id: 1, task: "Setup Database GCP", source: "Rapat SmartMT W1", pic: "Khairul", deadline: "2025-12-12", progress: 80, status: "On Progress" },
-    { id: 2, task: "Finalisasi Dashboard UI", source: "Rapat Internal", pic: "Tim Frontend", deadline: "2025-12-15", progress: 45, status: "On Progress" },
-    { id: 3, task: "Kontrak Vendor Indosat", source: "Rapat Legal", pic: "Pak Budi", deadline: "2025-12-01", progress: 100, status: "Done" },
-    { id: 4, task: "Testing Beban Server", source: "Rapat Teknis", pic: "Vendor", deadline: "2025-12-08", progress: 10, status: "Overdue" }
+// Ambil data dari LocalStorage saat pertama load (agar tidak hilang pas refresh)
+let actionItems = JSON.parse(localStorage.getItem('my_action_items')) || [
+    // Data Dummy Default (Hanya muncul jika belum ada data sama sekali)
+    { id: 1, task: "Setup Database GCP", source: "Contoh Notulen A", pic: "Khairul", deadline: "2025-12-12", progress: 80, status: "On Progress" }
 ];
 
+// Fungsi Membuka Modal & Mengisi Dropdown Sumber Notulen
+function openAddTaskModal() {
+    const select = document.getElementById('taskSource');
+    
+    // 1. Kosongkan opsi lama (kecuali opsi pertama)
+    select.innerHTML = '<option value="">-- Pilih Notulen --</option>';
+
+    // 2. Ambil data dari Data Master (allDocumentsData) dan masukkan ke dropdown
+    // allDocumentsData adalah variabel global yang sudah Anda miliki di kode sebelumnya
+    if (allDocumentsData.length > 0) {
+        allDocumentsData.forEach(doc => {
+            const option = document.createElement('option');
+            option.value = doc.nama_notulen; // Value yang disimpan
+            option.text = `${doc.nomor_notulen} - ${doc.nama_notulen}`; // Teks yang tampil
+            select.appendChild(option);
+        });
+    } else {
+        // Fallback jika data belum ter-load
+        const option = document.createElement('option');
+        option.text = "Data notulen belum tersedia (Cek tab Database)";
+        select.appendChild(option);
+    }
+
+    document.getElementById('addTaskModal').classList.remove('hidden');
+}
+
+function closeTaskModal() {
+    document.getElementById('addTaskModal').classList.add('hidden');
+}
+
+// Logic Simpan Tugas Baru
+document.getElementById('addTaskForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+
+    const newTask = {
+        id: Date.now(), // ID unik pakai timestamp
+        task: document.getElementById('taskName').value,
+        source: document.getElementById('taskSource').value,
+        pic: document.getElementById('taskPic').value,
+        deadline: document.getElementById('taskDeadline').value,
+        progress: 0,
+        status: 'On Progress'
+    };
+
+    actionItems.push(newTask);
+    saveToLocal(); // Simpan ke storage browser
+    
+    renderTracker();
+    closeTaskModal();
+    document.getElementById('addTaskForm').reset();
+    
+    Swal.fire({
+        icon: 'success',
+        title: 'Berhasil',
+        text: 'Tugas baru telah ditambahkan ke tracking list!',
+        timer: 2000,
+        showConfirmButton: false
+    });
+});
+
+// Logic Delete Tugas
+async function deleteTaskItem(id) {
+    const result = await Swal.fire({
+        title: 'Hapus Tugas ini?',
+        text: "Data tracking akan dihapus permanen.",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#ef4444',
+        confirmButtonText: 'Ya, Hapus'
+    });
+
+    if(result.isConfirmed) {
+        actionItems = actionItems.filter(item => item.id !== id);
+        saveToLocal();
+        renderTracker();
+        Toast.fire({ icon: 'success', title: 'Tugas dihapus' });
+    }
+}
+
+// Helper untuk simpan data
+function saveToLocal() {
+    localStorage.setItem('my_action_items', JSON.stringify(actionItems));
+}
+
+// Render Ulang Tabel (Sudah Update dengan Tombol Hapus)
 function renderTracker() {
     const tbody = document.getElementById('tracker-table-body');
-    const filter = document.getElementById('filterTrackStatus').value;
+    const filter = document.getElementById('filterTrackStatus') ? document.getElementById('filterTrackStatus').value : 'All';
     tbody.innerHTML = '';
 
-    // Hitung KPI
-    document.getElementById('track-total').innerText = actionItems.length;
-    document.getElementById('track-done').innerText = actionItems.filter(i => i.status === 'Done').length;
-    document.getElementById('track-overdue').innerText = actionItems.filter(i => i.status === 'Overdue').length;
-    document.getElementById('track-progress').innerText = actionItems.filter(i => i.status === 'On Progress').length;
+    // Update KPI Cards
+    if(document.getElementById('track-total')) {
+        document.getElementById('track-total').innerText = actionItems.length;
+        document.getElementById('track-done').innerText = actionItems.filter(i => i.status === 'Done').length;
+        document.getElementById('track-overdue').innerText = actionItems.filter(i => i.status === 'Overdue').length;
+        document.getElementById('track-progress').innerText = actionItems.filter(i => i.status === 'On Progress').length;
+    }
 
     actionItems.forEach(item => {
         if (filter !== 'All' && item.status !== filter) return;
 
-        // Logic Warna Progress Bar
         let barColor = 'bg-blue-600';
-        if(item.progress === 100) barColor = 'bg-green-500';
-        if(item.status === 'Overdue') barColor = 'bg-red-500';
-
-        // Logic Badge Status
-        let statusBadge = '';
-        if(item.status === 'Done') statusBadge = '<span class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">Selesai</span>';
-        else if(item.status === 'Overdue') statusBadge = '<span class="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-bold">Telat</span>';
-        else statusBadge = '<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-bold">Proses</span>';
+        let statusBadge = '<span class="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-bold">Proses</span>';
+        
+        if(item.progress === 100) {
+            barColor = 'bg-green-500';
+            statusBadge = '<span class="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">Selesai</span>';
+        }
+        if(item.status === 'Overdue') {
+            barColor = 'bg-red-500';
+            statusBadge = '<span class="bg-red-100 text-red-700 px-2 py-1 rounded-full text-xs font-bold">Telat</span>';
+        }
 
         tbody.innerHTML += `
-            <tr class="hover:bg-gray-50 transition group">
+            <tr class="hover:bg-gray-50 transition border-b border-gray-100">
                 <td class="p-4">
                     <div class="font-bold text-gray-800">${item.task}</div>
-                    <div class="text-xs text-gray-500"><i class="ph ph-file-text"></i> ${item.source}</div>
+                    <div class="text-xs text-blue-600 flex items-center gap-1 mt-1">
+                        <i class="ph ph-link"></i> ${item.source}
+                    </div>
                 </td>
                 <td class="p-4">
                     <div class="flex items-center gap-2">
-                        <div class="w-6 h-6 rounded-full bg-gray-200 text-xs flex items-center justify-center font-bold text-gray-600">${item.pic.charAt(0)}</div>
-                        <span class="font-medium">${item.pic}</span>
+                        <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-600 text-xs flex items-center justify-center font-bold border border-blue-200">${item.pic.charAt(0).toUpperCase()}</div>
+                        <span class="font-medium text-sm text-gray-600">${item.pic}</span>
                     </div>
                 </td>
-                <td class="p-4 font-mono text-xs">${item.deadline}</td>
-                <td class="p-4">
-                    <div class="flex justify-between text-xs mb-1 font-semibold text-gray-500">
+                <td class="p-4 font-mono text-xs text-gray-500">${item.deadline}</td>
+                <td class="p-4 w-1/4">
+                    <div class="flex justify-between text-[10px] mb-1 font-bold text-gray-500">
+                        <span>PROGRESS</span>
                         <span>${item.progress}%</span>
                     </div>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
-                        <div class="${barColor} h-2.5 rounded-full transition-all duration-500" style="width: ${item.progress}%"></div>
+                    <div class="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                        <div class="${barColor} h-2 rounded-full transition-all duration-500" style="width: ${item.progress}%"></div>
                     </div>
                 </td>
                 <td class="p-4 text-center">${statusBadge}</td>
                 <td class="p-4 text-center">
-                    <button onclick="updateTask(${item.id})" class="text-blue-600 hover:bg-blue-50 p-2 rounded-lg text-sm font-semibold transition">Update</button>
+                    <div class="flex items-center justify-center gap-2">
+                        <button onclick="updateTask(${item.id})" class="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition" title="Update Progress">
+                            <i class="ph ph-pencil-simple text-lg"></i>
+                        </button>
+                        <button onclick="deleteTaskItem(${item.id})" class="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition" title="Hapus Tugas">
+                            <i class="ph ph-trash text-lg"></i>
+                        </button>
+                    </div>
                 </td>
             </tr>
         `;
-    });
-}
-
-function updateTask(id) {
-    // Simulasi Update Sederhana
-    const item = actionItems.find(i => i.id === id);
-    Swal.fire({
-        title: 'Update Progress',
-        input: 'range',
-        inputLabel: `Progress saat ini: ${item.progress}%`,
-        inputValue: item.progress,
-        inputAttributes: { min: 0, max: 100, step: 5 },
-        showCancelButton: true
-    }).then((result) => {
-        if (result.isConfirmed) {
-            item.progress = parseInt(result.value);
-            if(item.progress === 100) item.status = "Done";
-            else if(item.progress < 100 && item.status === "Done") item.status = "On Progress";
-            
-            Toast.fire({ icon: 'success', title: 'Progress diperbarui!' });
-            renderTracker();
-        }
     });
 }
 
